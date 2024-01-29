@@ -9,9 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -49,12 +48,15 @@ public class GenerateCacheHelper {
                 for (int i = 0; i < 5000; i ++) {
                     Long timestamp = System.currentTimeMillis();
                     MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
+                    Boolean success = false;
                     if(metadataValue==null) {
-                        cache.put(listOfUuid.get(i), UUID.randomUUID().toString());
+                        cache.put(listOfUuid.get(i), new BigDecimal(1000));
+                        success = true;
                     } else {
-                        cache.replaceWithVersion(listOfUuid.get(i), UUID.randomUUID()+"-"+metadataValue.getVersion(), metadataValue.getVersion());
+                        BigDecimal newValue = (new BigDecimal((String)metadataValue.getValue())).add(new BigDecimal(1000));
+                        success = cache.replaceWithVersion(listOfUuid.get(i), newValue, metadataValue.getVersion());
                     }
-                    logger.info("printing {} for {}", listOfUuid.get(i), System.currentTimeMillis()-timestamp);
+                    logger.info("{} printing {} version is {} for {}", success, listOfUuid.get(i), metadataValue==null?"0":metadataValue.getVersion(), System.currentTimeMillis()-timestamp);
                 }
             });
         }
