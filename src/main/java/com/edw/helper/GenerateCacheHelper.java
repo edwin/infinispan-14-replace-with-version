@@ -49,7 +49,11 @@ public class GenerateCacheHelper {
                 for (int i = 0; i < 5000; i ++) {
                     Long timestamp = System.currentTimeMillis();
                     MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
-                    cache.replaceWithVersion(listOfUuid.get(i), UUID.randomUUID().toString(), metadataValue.getVersion()+1);
+                    if(metadataValue==null) {
+                        cache.put(listOfUuid.get(i), UUID.randomUUID().toString());
+                    } else {
+                        cache.replaceWithVersion(listOfUuid.get(i), UUID.randomUUID()+"-"+metadataValue.getVersion(), metadataValue.getVersion());
+                    }
                     logger.info("printing {} for {}", listOfUuid.get(i), System.currentTimeMillis()-timestamp);
                 }
             });

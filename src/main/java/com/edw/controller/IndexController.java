@@ -21,6 +21,7 @@ public class IndexController {
 
     @GetMapping(path = "/start")
     public String addAll() {
+        generateCacheHelper.generate();
         return "good";
     }
 }
