@@ -1,6 +1,7 @@
 package com.edw.helper;
 
 import jakarta.annotation.PostConstruct;
+import org.infinispan.client.hotrod.Flag;
 import org.infinispan.client.hotrod.MetadataValue;
 import org.infinispan.client.hotrod.RemoteCache;
 import org.infinispan.client.hotrod.RemoteCacheManager;
@@ -46,17 +47,22 @@ public class GenerateCacheHelper {
         for(int j = 0 ; j < 10; j ++) {
             executor.execute(() -> {
                 for (int i = 0; i < 5000; i ++) {
-                    Long timestamp = System.currentTimeMillis();
-                    MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
-                    Boolean success = false;
-                    if(metadataValue==null) {
-                        cache.put(listOfUuid.get(i), new BigDecimal(1000));
-                        success = true;
-                    } else {
-                        BigDecimal newValue = (new BigDecimal((String)metadataValue.getValue())).add(new BigDecimal(1000));
-                        success = cache.replaceWithVersion(listOfUuid.get(i), newValue, metadataValue.getVersion());
+                    while (true) {
+                        Long timestamp = System.currentTimeMillis();
+                        MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
+                        Boolean success = false;
+                        if(metadataValue==null) {
+                            Object o = cache.withFlags(Flag.FORCE_RETURN_VALUE).putIfAbsent(listOfUuid.get(i), new BigDecimal(1000));
+                            success = o == null;
+                        } else {
+                            BigDecimal newValue = (new BigDecimal((String)metadataValue.getValue())).add(new BigDecimal(1000));
+                            success = cache.replaceWithVersion(listOfUuid.get(i), newValue, metadataValue.getVersion());
+                        }
+                        logger.info("{} printing {} version is {} for {}", success, listOfUuid.get(i), metadataValue==null?"0":metadataValue.getVersion(), System.currentTimeMillis()-timestamp);
+
+                        if(success)
+                            break;
                     }
-                    logger.info("{} printing {} version is {} for {}", success, listOfUuid.get(i), metadataValue==null?"0":metadataValue.getVersion(), System.currentTimeMillis()-timestamp);
                 }
             });
         }
