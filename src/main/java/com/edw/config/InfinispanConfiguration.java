@@ -20,7 +20,7 @@ public class InfinispanConfiguration {
     public RemoteCacheManager remoteCacheManager() {
         return new RemoteCacheManager(
                 new org.infinispan.client.hotrod.configuration.ConfigurationBuilder()
-                        .addServers("127.0.0.1:11222;127.0.0.1:11223;127.0.0.1:11224")
+                        .addServers("127.0.0.1:11222;127.0.0.1:11223")
                         .security().authentication().username("admin").password("password")
                         .clientIntelligence(ClientIntelligence.HASH_DISTRIBUTION_AWARE)
                         .marshaller(ProtoStreamMarshaller.class)

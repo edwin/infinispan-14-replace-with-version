@@ -19,8 +19,14 @@ public class IndexController {
     @Autowired
     private GenerateCacheHelper generateCacheHelper;
 
-    @GetMapping(path = "/start")
-    public String addAll() {
+    @GetMapping(path = "/initiate")
+    public String init() {
+        generateCacheHelper.initiate();
+        return "good";
+    }
+
+    @GetMapping(path = "/process")
+    public String process() {
         generateCacheHelper.generate();
         return "good";
     }
