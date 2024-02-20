@@ -20,19 +20,19 @@
         <start-class>com.edw.Main</start-class>
     </properties>
 
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.0.4</version>
-        <relativePath>parent.pom.xml</relativePath>
-    </parent>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>org.infinispan</groupId>
                 <artifactId>infinispan-bom</artifactId>
                 <version>${version.infinispan}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-parent</artifactId>
+                <version>${version.spring.boot3}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -64,6 +64,12 @@
             <groupId>org.infinispan</groupId>
             <artifactId>infinispan-api</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.infinispan</groupId>
+            <artifactId>infinispan-spring-boot-starter-embedded</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.infinispan.protostream</groupId>
             <artifactId>protostream-processor</artifactId>

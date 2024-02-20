@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * <pre>
  *     com.edw.controller.IndexController
@@ -26,8 +28,13 @@ public class IndexController {
     }
 
     @GetMapping(path = "/process")
-    public String process() {
-        generateCacheHelper.generate();
+    public String process() throws Exception {
+        generateCacheHelper.generate2();
         return "good";
+    }
+
+    @GetMapping(path = "/query")
+    public List<String> query() throws Exception {
+        return generateCacheHelper.query();
     }
 }
