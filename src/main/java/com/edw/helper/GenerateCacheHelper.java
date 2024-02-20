@@ -5,6 +5,7 @@ import org.infinispan.Cache;
 import org.infinispan.client.hotrod.MetadataValue;
 import org.infinispan.client.hotrod.RemoteCache;
 import org.infinispan.client.hotrod.RemoteCacheManager;
+import org.infinispan.commons.api.CacheContainerAdmin;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.transaction.TransactionMode;
 import org.slf4j.Logger;
@@ -117,6 +118,10 @@ public class GenerateCacheHelper {
     public void generate2() {
         logger.info("starting ====================");
 
+        if(!embeddedCacheManager.cacheExists("temp-cache")) {
+            createEmbedCache();
+        }
+
         final Cache embedCache = embeddedCacheManager.getCache("temp-cache");
         latch = new CountDownLatch(NUM_EXECUTORS);
 
@@ -196,10 +201,10 @@ public class GenerateCacheHelper {
             }
         }
 
-        // clear the local cache
-        embedCache.clear();
-
         logger.info("done ====================");
+
+        // clear the local cache
+        embeddedCacheManager.administration().removeCache("temp-cache");
     }
 
     public List<String> query() {
@@ -215,17 +220,24 @@ public class GenerateCacheHelper {
 
     public void initiate() {
 
-        org.infinispan.configuration.cache.Configuration tempCache = new org.infinispan.configuration.cache.ConfigurationBuilder()
-                .transaction().transactionMode(TransactionMode.TRANSACTIONAL)
-                .build();
-        embeddedCacheManager.createCache("temp-cache", tempCache);
+        createEmbedCache();
         final Cache embedCache = embeddedCacheManager.getCache("temp-cache");
         final RemoteCache cache = cacheManager.getCache("balance");
 
         for (String uuid : listOfUuid) {
             cache.putIfAbsent(uuid, new BigDecimal(0));
-            embedCache.putIfAbsent(uuid, new BigDecimal(0));
             concurrentHashMap.put(uuid,  new BigDecimal(0));
+        }
+    }
+
+    private void createEmbedCache() {
+        org.infinispan.configuration.cache.Configuration tempCache = new org.infinispan.configuration.cache.ConfigurationBuilder()
+                .transaction().transactionMode(TransactionMode.TRANSACTIONAL)
+                .build();
+        embeddedCacheManager.administration().withFlags(CacheContainerAdmin.AdminFlag.VOLATILE).createCache("temp-cache", tempCache);
+
+        for (String uuid : listOfUuid) {
+            embeddedCacheManager.getCache("temp-cache").putIfAbsent(uuid, new BigDecimal(0));
         }
     }
 }
