@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * <pre>
@@ -45,7 +47,7 @@ public class GenerateCacheHelper {
     private List<String> listOfUuid = new ArrayList<>();
 
     private static final int NUM_EXECUTORS = 100;
-    private static final int NUM_ENTRIES = 100;
+    private static final int NUM_ENTRIES = 5000;
 
     final private Map<String, BigDecimal> concurrentHashMap = new ConcurrentHashMap<>(NUM_ENTRIES, 0.9f, 1);
 
@@ -256,22 +258,38 @@ public class GenerateCacheHelper {
         final RemoteCache cache = cacheManager.getCache("balance");
         latch = new CountDownLatch(NUM_ENTRIES);
 
-        for(List<Bean> beans : listOfUuidBeans) {
-            executor.execute(() -> {
-                for (Bean bean : beans) {
+        int CHUNK_SIZE = 200;
 
-                    logger.info("processing  {} ", bean);
+        // split into CHUNK_SIZE threads
+        AtomicInteger counter = new AtomicInteger();
+        Collection<List<List<Bean>>> partitionedList = listOfUuidBeans.stream()
+                                                                    .collect(Collectors.groupingBy(i -> counter.getAndIncrement() / CHUNK_SIZE))
+                                                                    .values();
 
-                    MetadataValue metadataValue;
-                    BigDecimal newValue;
-                    do {
-                        metadataValue = cache.getWithMetadata(bean.getKey());
-                        newValue = (bean.getValue().add(new BigDecimal("" + metadataValue.getValue())));
-                    } while(!cache.replaceWithVersion(bean.getKey(), newValue, metadataValue.getVersion()));
-                }
+        for (List<List<Bean>> partitioned : partitionedList) {
+            CountDownLatch privateLatch = new CountDownLatch(CHUNK_SIZE);;
+            for(List<Bean> beans : partitioned) {
+                executor.execute(() -> {
+                    logger.info("processing {} ", beans.get(0).getKey());
+                    for (Bean bean : beans) {
+                        MetadataValue metadataValue;
+                        BigDecimal newValue;
+                        do {
+                            metadataValue = cache.getWithMetadata(bean.getKey());
+                            newValue = (bean.getValue().add(new BigDecimal("" + metadataValue.getValue())));
+                        } while(!cache.replaceWithVersion(bean.getKey(), newValue, metadataValue.getVersion()));
+                    }
 
-                latch.countDown();
-            });
+                    privateLatch.countDown();
+                    latch.countDown();
+                });
+            }
+
+            try {
+                privateLatch.await();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
 
         try {

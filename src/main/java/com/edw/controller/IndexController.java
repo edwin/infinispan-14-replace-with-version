@@ -29,7 +29,7 @@ public class IndexController {
 
     @GetMapping(path = "/process")
     public String process() throws Exception {
-        generateCacheHelper.generate2();
+        generateCacheHelper.generateConcurrentButSequential();
         return "good";
     }
 
