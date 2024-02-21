@@ -45,7 +45,7 @@ public class GenerateCacheHelper {
     private List<String> listOfUuid = new ArrayList<>();
 
     private static final int NUM_EXECUTORS = 100;
-    private static final int NUM_ENTRIES = 5000;
+    private static final int NUM_ENTRIES = 100;
 
     final private Map<String, BigDecimal> concurrentHashMap = new ConcurrentHashMap<>(NUM_ENTRIES, 0.9f, 1);
 
@@ -221,7 +221,6 @@ public class GenerateCacheHelper {
     public void initiate() {
 
         createEmbedCache();
-        final Cache embedCache = embeddedCacheManager.getCache("temp-cache");
         final RemoteCache cache = cacheManager.getCache("balance");
 
         for (String uuid : listOfUuid) {
@@ -238,6 +237,86 @@ public class GenerateCacheHelper {
 
         for (String uuid : listOfUuid) {
             embeddedCacheManager.getCache("temp-cache").putIfAbsent(uuid, new BigDecimal(0));
+        }
+    }
+
+    public void generateConcurrentButSequential() {
+        List<List<Bean>> listOfUuidBeans = new ArrayList<>();
+        for (String uuid : listOfUuid) {
+            List<Bean> listOfBeans = new ArrayList<>();
+            for (int i = 0 ; i < NUM_EXECUTORS; i ++) {
+                listOfBeans.add(new Bean(uuid, new BigDecimal(1000)));
+            }
+            listOfUuidBeans.add(listOfBeans);
+        }
+
+
+        logger.info("begin ====================");
+
+        final RemoteCache cache = cacheManager.getCache("balance");
+        latch = new CountDownLatch(NUM_ENTRIES);
+
+        for(List<Bean> beans : listOfUuidBeans) {
+            executor.execute(() -> {
+                for (Bean bean : beans) {
+
+                    logger.info("processing  {} ", bean);
+
+                    MetadataValue metadataValue;
+                    BigDecimal newValue;
+                    do {
+                        metadataValue = cache.getWithMetadata(bean.getKey());
+                        newValue = (bean.getValue().add(new BigDecimal("" + metadataValue.getValue())));
+                    } while(!cache.replaceWithVersion(bean.getKey(), newValue, metadataValue.getVersion()));
+                }
+
+                latch.countDown();
+            });
+        }
+
+        try {
+            latch.await();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        logger.info("done ====================");
+    }
+
+    class Bean {
+        private String key;
+        private BigDecimal value;
+
+        public Bean() {
+        }
+
+        public Bean(String key, BigDecimal value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public void setKey(String key) {
+            this.key = key;
+        }
+
+        public BigDecimal getValue() {
+            return value;
+        }
+
+        public void setValue(BigDecimal value) {
+            this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return "Bean{" +
+                    "key='" + key + '\'' +
+                    ", value=" + value +
+                    '}';
         }
     }
 }
