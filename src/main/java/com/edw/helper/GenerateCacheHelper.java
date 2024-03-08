@@ -62,56 +62,28 @@ public class GenerateCacheHelper {
 
     public void generate() {
         logger.info("starting ====================");
-        latch = new CountDownLatch(NUM_EXECUTORS);
-
-        for (int j = 0; j < NUM_EXECUTORS; j++) {
-            executor.execute(() -> {
-
-                ArrayList<String> tempArrayList = new ArrayList(listOfUuid);
-                Collections.shuffle(tempArrayList);
-
-                for (String uuid : tempArrayList) {
-                    BigDecimal oldValue;
-                    BigDecimal newValue;
-                    do {
-                        oldValue = concurrentHashMap.get(uuid);
-                        newValue = concurrentHashMap.get(uuid).add(new BigDecimal(1000));
-                    } while(!concurrentHashMap.replace(uuid, oldValue, newValue));
-                }
-
-                latch.countDown();
-            });
-        }
-
-        try {
-            latch.await();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
         final RemoteCache cache = cacheManager.getCache("balance");
-        for(Map.Entry<String, BigDecimal> entry : concurrentHashMap.entrySet()) {
-            while (true) {
-                Long timestamp = System.currentTimeMillis();
-                MetadataValue metadataValue = cache.getWithMetadata(entry.getKey());
-                BigDecimal newValue = entry.getValue();
-                Boolean success = cache.replaceWithVersion(entry.getKey(), newValue, metadataValue.getVersion());
 
-                if (success) {
-                    logger.info("successfully processing {} - {}", entry.getKey(), entry.getValue());
-                    break;
-                }
-                else {
-                    logger.info("{} retry {} version is {} for {}", success, entry.getKey(),
-                            metadataValue.getVersion(),
-                            System.currentTimeMillis() - timestamp);
-                    try {
-                        Thread.sleep(new Random().nextInt(100, 1000));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
+        for(int j = 0 ; j < NUM_EXECUTORS; j ++) {
+            executor.execute(() -> {
+                for (int i = 0; i < NUM_ENTRIES; i ++) {
+                    while (true) {
+                        Long timestamp = System.currentTimeMillis();
+                        MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
+                        BigDecimal newValue =
+                                new BigDecimal((String) metadataValue.getValue()).add(new BigDecimal(1000));
+                        Boolean success = cache.replaceWithVersion(listOfUuid.get(i), newValue, metadataValue.getVersion());
+
+                        if (success)
+                            break;
+                        else {
+                            logger.info("retrying {} for {}",
+                                    listOfUuid.get(i),
+                                    System.currentTimeMillis() - timestamp);
+                        }
                     }
                 }
-            }
+            });
         }
 
         logger.info("done ====================");
