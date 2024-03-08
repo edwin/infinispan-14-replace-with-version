@@ -1,7 +1,7 @@
-# Infinispan 14 and replaceWithVersion
+# Infinispan 6.3.1 and replaceWithVersion
 
 ## About
-Java project to simulate `replaceWithVersion` on Red Hat Datagrid 6.5.1. 
+Java project to simulate `replaceWithVersion` on Red Hat Datagrid 6.5.1 (Infinispan 6.3.1). 
 
 ## Cache Configuration
 ```xml

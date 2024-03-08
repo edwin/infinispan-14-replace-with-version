@@ -1,6 +1,5 @@
 package com.edw.helper;
 
-import jakarta.annotation.PostConstruct;
 import org.infinispan.Cache;
 import org.infinispan.client.hotrod.MetadataValue;
 import org.infinispan.client.hotrod.RemoteCache;
@@ -13,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import javax.transaction.TransactionManager;
 import java.math.BigDecimal;
 import java.util.*;
@@ -37,9 +37,6 @@ public class GenerateCacheHelper {
     @Autowired
     private RemoteCacheManager cacheManager;
 
-    @Autowired
-    private EmbeddedCacheManager embeddedCacheManager;
-
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newCachedThreadPool();
@@ -62,158 +59,38 @@ public class GenerateCacheHelper {
 
     public void generate() {
         logger.info("starting ====================");
-        latch = new CountDownLatch(NUM_EXECUTORS);
-
-        for (int j = 0; j < NUM_EXECUTORS; j++) {
-            executor.execute(() -> {
-
-                ArrayList<String> tempArrayList = new ArrayList(listOfUuid);
-                Collections.shuffle(tempArrayList);
-
-                for (String uuid : tempArrayList) {
-                    BigDecimal oldValue;
-                    BigDecimal newValue;
-                    do {
-                        oldValue = concurrentHashMap.get(uuid);
-                        newValue = concurrentHashMap.get(uuid).add(new BigDecimal(1000));
-                    } while(!concurrentHashMap.replace(uuid, oldValue, newValue));
-                }
-
-                latch.countDown();
-            });
-        }
-
-        try {
-            latch.await();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
         final RemoteCache cache = cacheManager.getCache("balance");
-        for(Map.Entry<String, BigDecimal> entry : concurrentHashMap.entrySet()) {
-            while (true) {
-                Long timestamp = System.currentTimeMillis();
-                MetadataValue metadataValue = cache.getWithMetadata(entry.getKey());
-                BigDecimal newValue = entry.getValue();
-                Boolean success = cache.replaceWithVersion(entry.getKey(), newValue, metadataValue.getVersion());
 
-                if (success) {
-                    logger.info("successfully processing {} - {}", entry.getKey(), entry.getValue());
-                    break;
-                }
-                else {
-                    logger.info("{} retry {} version is {} for {}", success, entry.getKey(),
-                            metadataValue.getVersion(),
-                            System.currentTimeMillis() - timestamp);
-                    try {
-                        Thread.sleep(new Random().nextInt(100, 1000));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-
-        logger.info("done ====================");
-    }
-
-    public void generate2() {
-        logger.info("starting ====================");
-
-        if(!embeddedCacheManager.cacheExists("temp-cache")) {
-            createEmbedCache();
-        }
-
-        final Cache embedCache = embeddedCacheManager.getCache("temp-cache");
-        latch = new CountDownLatch(NUM_EXECUTORS);
-
-        for (int j = 0; j < NUM_EXECUTORS; j++) {
+        for(int j = 0 ; j < NUM_EXECUTORS; j ++) {
             executor.execute(() -> {
-
-                ArrayList<String> tempArrayList = new ArrayList(listOfUuid);
-                Collections.shuffle(tempArrayList);
-
-                for (String uuid : tempArrayList) {
+                for (int i = 0; i < NUM_ENTRIES; i ++) {
                     while (true) {
-                        TransactionManager transactionManager = embedCache.getAdvancedCache().getTransactionManager();
-                        Boolean success = false;
                         Long timestamp = System.currentTimeMillis();
-
-                        try {
-                            transactionManager.begin();
-
-                            BigDecimal oldValue = (BigDecimal) embedCache.get(uuid);
-                            BigDecimal newValue = oldValue.add(new BigDecimal(1000));
-                            success = embedCache.replace(uuid, oldValue, newValue);
-                            transactionManager.commit();
-                        } catch (Exception ex) {
-                            try {
-                                success = false;
-                                transactionManager.rollback();
-                            } catch (Exception ex1) {
-                            }
-                        }
+                        MetadataValue metadataValue = cache.getWithMetadata(listOfUuid.get(i));
+                        BigDecimal newValue =
+                                ((BigDecimal) metadataValue.getValue()).add(new BigDecimal(1000));
+                        Boolean success = cache.replaceWithVersion(listOfUuid.get(i), newValue, metadataValue.getVersion());
 
                         if (success)
                             break;
                         else {
-                            logger.info("{} retrying {} for {}", success, uuid,
-                                    System.currentTimeMillis() - timestamp);
-//                            try {
-//                                Thread.sleep(new Random().nextInt(100));
-//                            } catch (Exception ex) {
-//                                ex.printStackTrace();
-//                            }
+                            logger.info("retrying {} for {}",
+                                                listOfUuid.get(i),
+                                                System.currentTimeMillis() - timestamp);
                         }
                     }
                 }
-
-                latch.countDown();
             });
         }
 
-        try {
-            latch.await();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        final RemoteCache cache = cacheManager.getCache("balance");
-        for (String uuid : listOfUuid) {
-            while (true) {
-                Long timestamp = System.currentTimeMillis();
-                MetadataValue metadataValue = cache.getWithMetadata(uuid);
-                BigDecimal newValue = (new BigDecimal("" + embedCache.get(uuid))).add(new BigDecimal("" + metadataValue.getValue()));
-                Boolean success = cache.replaceWithVersion(uuid, newValue, metadataValue.getVersion());
-
-                if (success) {
-                    logger.info("successfully processing {} - {}", uuid, newValue);
-                    break;
-                }
-                else {
-                    logger.info("{} retry {} version is {} for {}", success, uuid,
-                            metadataValue.getVersion(),
-                            System.currentTimeMillis() - timestamp);
-                    try {
-                        Thread.sleep(new Random().nextInt(100, 1000));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-
         logger.info("done ====================");
-
-        // clear the local cache
-        embeddedCacheManager.administration().removeCache("temp-cache");
     }
 
     public List<String> query() {
         List<String> list = new ArrayList<>();
         final RemoteCache cache = cacheManager.getCache("balance");
         for (String uuid : listOfUuid) {
-            BigDecimal bigDecimal = new BigDecimal((String) cache.get(uuid));
+            BigDecimal bigDecimal = (BigDecimal) cache.get(uuid);
             if(!bigDecimal.equals(new BigDecimal(100_000)))
                 list.add(uuid);
         }
@@ -221,24 +98,11 @@ public class GenerateCacheHelper {
     }
 
     public void initiate() {
-
-        createEmbedCache();
         final RemoteCache cache = cacheManager.getCache("balance");
 
         for (String uuid : listOfUuid) {
             cache.putIfAbsent(uuid, new BigDecimal(0));
             concurrentHashMap.put(uuid,  new BigDecimal(0));
-        }
-    }
-
-    private void createEmbedCache() {
-        org.infinispan.configuration.cache.Configuration tempCache = new org.infinispan.configuration.cache.ConfigurationBuilder()
-                .transaction().transactionMode(TransactionMode.TRANSACTIONAL)
-                .build();
-        embeddedCacheManager.administration().withFlags(CacheContainerAdmin.AdminFlag.VOLATILE).createCache("temp-cache", tempCache);
-
-        for (String uuid : listOfUuid) {
-            embeddedCacheManager.getCache("temp-cache").putIfAbsent(uuid, new BigDecimal(0));
         }
     }
 
