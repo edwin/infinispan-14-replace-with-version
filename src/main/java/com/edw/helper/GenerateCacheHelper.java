@@ -272,12 +272,22 @@ public class GenerateCacheHelper {
                 executor.execute(() -> {
                     logger.info("processing {} ", beans.get(0).getKey());
                     for (Bean bean : beans) {
-                        MetadataValue metadataValue;
-                        BigDecimal newValue;
-                        do {
-                            metadataValue = cache.getWithMetadata(bean.getKey());
-                            newValue = (bean.getValue().add(new BigDecimal("" + metadataValue.getValue())));
-                        } while(!cache.replaceWithVersion(bean.getKey(), newValue, metadataValue.getVersion()));
+                        while (true) {
+                            Long timestamp = System.currentTimeMillis();
+                            MetadataValue metadataValue = cache.getWithMetadata(bean.getKey());
+                            BigDecimal newValue = (bean.getValue().add(new BigDecimal("" + metadataValue.getValue())));
+                            Boolean success = cache.replaceWithVersion(bean.getKey(), newValue, metadataValue.getVersion());
+
+                            if (success) {
+                                logger.info("successfully processing {} - {}", bean.getKey(), bean.getValue());
+                                break;
+                            }
+                            else {
+                                logger.info("{} retry {} version is {} for {}", success, bean.getKey(),
+                                        metadataValue.getVersion(),
+                                        System.currentTimeMillis() - timestamp);
+                            }
+                        }
                     }
 
                     privateLatch.countDown();
