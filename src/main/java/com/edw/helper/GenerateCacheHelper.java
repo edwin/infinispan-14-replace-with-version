@@ -59,6 +59,9 @@ public class GenerateCacheHelper {
 
     public void generate() {
         logger.info("starting ====================");
+
+        latch = new CountDownLatch(NUM_EXECUTORS);
+
         final RemoteCache cache = cacheManager.getCache("balance");
 
         for(int j = 0 ; j < NUM_EXECUTORS; j ++) {
@@ -80,7 +83,15 @@ public class GenerateCacheHelper {
                         }
                     }
                 }
+
+                latch.countDown();
             });
+        }
+
+        try {
+            latch.await();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
 
         logger.info("done ====================");
